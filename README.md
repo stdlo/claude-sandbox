@@ -56,11 +56,12 @@ To let git itself use the same login for HTTPS remotes, run `gh auth setup-git`.
 
 ## Building
 
-GitHub Actions builds the image on every push to `main` (and on demand from the Actions tab, for example to
-pick up a new Claude Code release) and publishes it to GitHub's container registry, named after the repository:
-`ghcr.io/stdlo/claude-sandbox`. Each build is tagged `latest` and with its short commit sha. It is built for
-`linux/amd64` and `linux/arm64` (Apple silicon), each natively on GitHub's own runners (`ubuntu-latest` and
-`ubuntu-24.04-arm`) in parallel, then joined into one multi-arch manifest. There is no schedule; a rebuild
+GitHub Actions builds the image on every push to any branch (and on demand from the Actions tab, for example
+to pick up a new Claude Code release) and publishes it to GitHub's container registry, named after the
+repository: `ghcr.io/stdlo/claude-sandbox`. Every build is tagged with its short commit sha, and builds of
+`main` also as `latest`, so a branch can be tried (`docker pull …:sha-<commit>`) before it merges. It is built
+for `linux/amd64` and `linux/arm64` (Apple silicon), each natively on GitHub's own runners (`ubuntu-latest`
+and `ubuntu-24.04-arm`) in parallel, then joined into one multi-arch manifest. There is no schedule; a rebuild
 happens only when something is pushed or someone asks for one.
 
     docker pull ghcr.io/stdlo/claude-sandbox:latest

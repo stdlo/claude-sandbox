@@ -1,6 +1,7 @@
 # Builds the sandbox image and publishes it to GitHub's container registry as ghcr.io/stdlo/claude-sandbox.
-# Runs on every push to main, and by hand from the Actions tab (for example to pick up a new Claude Code
-# release, since the Dockerfile installs whatever is current). There is no schedule.
+# Runs on every push to any branch, and by hand from the Actions tab (for example to pick up a new Claude Code
+# release, since the Dockerfile installs whatever is current). There is no schedule. A branch's build is tagged
+# only with its commit sha, so a broken change shows up before it merges; only main moves `latest`.
 #
 # Each architecture builds natively on its own runner (amd64 on ubuntu-latest, arm64 on ubuntu-24.04-arm) and
 # pushes its image by digest; a final job stitches the two digests into one multi-arch manifest under the tags.
@@ -8,7 +9,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
