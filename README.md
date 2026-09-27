@@ -1,9 +1,11 @@
 # claude-sandbox
 
-The container image Claude Code runs in. Built on plain Debian 13 (trixie, slim), it adds curl, git, unzip,
-ripgrep and the GitHub CLI (`gh`), creates the non-root user (uid 1001, gid 0, home `/opt/app-root/src`),
-installs Claude Code, and sets `/workspace` as the working directory. `/workspace` is meant to be a mount of
-the `claude-workspace` folder that holds every repo shared with Claude.
+The container image Claude Code runs in. Built on plain Debian 13 (trixie, slim), it adds curl, git, ripgrep,
+the GitHub CLI (`gh`) and the everyday shell tools (diff, patch, jq, ps, file, make, xz, zip, less, tree,
+ShellCheck, and dig, nc, lsof, strace and sqlite3 for debugging; nothing that reaches a cluster or a database
+server), creates the non-root user (uid 1001, gid 0, home `/opt/app-root/src`), installs Claude Code, and sets
+`/workspace` as the working directory. `/workspace` is meant to be a mount of the `claude-workspace` folder
+that holds every repo shared with Claude.
 
 The user's uid, gid and home come from the Red Hat UBI 9 image this started from. Keeping them means an
 existing `~/.claude` volume from that image, and the `gh` login stored in it, carry over unchanged.

@@ -5,14 +5,18 @@ FROM debian:trixie-slim
 ARG NODE_VERSION=24
 ARG PYTHON_VERSION=3.13
 
-# Tools (the slim image has no curl or CA certificates), ripgrep, the GitHub CLI (Debian's package lags far
-# behind, so it comes from the release), and the non-root user. The user keeps the uid, gid, home and shell of
+# Tools (the slim image has no curl or CA certificates), ripgrep, ShellCheck, the everyday tools a shell session
+# expects (diff, patch, jq, ps, file, make, xz, zip, less, tree) and a few for debugging (dig, nc, lsof, strace,
+# sqlite3), nothing that reaches a cluster or a database server; the GitHub CLI (Debian's package lags far behind,
+# so it comes from the release); and the non-root user. The user keeps the uid, gid, home and shell of
 # the Red Hat UBI image this started from (1001, 0, /opt/app-root/src, bash), so an existing ~/.claude volume
 # still belongs to it and the gh login in it keeps working. /workspace is the mount point for the
 # claude-workspace folder.
 USER 0
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl git unzip ripgrep \
+ && apt-get install -y --no-install-recommends ca-certificates curl git unzip ripgrep shellcheck \
+      diffutils patch jq procps file make xz-utils zip less tree \
+      bind9-dnsutils netcat-openbsd lsof strace sqlite3 \
  && rm -rf /var/lib/apt/lists/* \
  && rg --version \
  && GH=2.101.0 \
