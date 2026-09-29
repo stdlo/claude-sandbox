@@ -8,7 +8,7 @@ server), creates the non-root user (uid 1001, gid 0, home `/opt/app-root/src`), 
 that holds every repo shared with Claude.
 
 The user's uid, gid and home come from the Red Hat UBI 9 image this started from. Keeping them means an
-existing `~/.claude` volume from that image, and the `gh` login stored in it, carry over unchanged.
+existing `claude-config` volume (mounted at `~/.claude`) from that image, and the `gh` login stored in it, carry over unchanged.
 
 ## Node and Python
 
@@ -44,7 +44,7 @@ issues a token that reaches every repository your account can, restricted only b
        ! gh auth login --with-token
 
    The login is stored in `GH_CONFIG_DIR`, which the image points at `~/.claude/gh` rather than the default
-   `~/.config/gh`, so it sits on the `~/.claude` volume that every run mounts and survives a restart. Nothing
+   `~/.config/gh`, so it sits on the `claude-config` volume mounted at `~/.claude` ("Running it" above) and survives a restart. Nothing
    needs to be set on `docker run`.
 6. Check the fence. A repo that is not on the token's list must fail with a 404, and a shared one must work:
 
@@ -53,6 +53,18 @@ issues a token that reaches every repository your account can, restricted only b
 
 To let git itself use the same login for HTTPS remotes, run `gh auth setup-git`. It writes to
 `~/.gitconfig`, which is not persisted, so rerun it after a restart.
+
+## Running it
+The owner's command, from the Mac (the image sets `TZ=America/Los_Angeles`; pass `-e TZ=…` to override it):
+
+    docker run -it --rm \
+      -v "$HOME/git/claude-workspace/":/workspace \
+      -v claude-config:/opt/app-root/src/.claude \
+      ghcr.io/stdlo/claude-sandbox claude
+
+`/workspace` is a folder holding the repos Claude may work in, so everything Claude writes there persists on the Mac. `claude-config` is a named
+Docker volume mounted at `~/.claude` inside the container (`/opt/app-root/src/.claude`): Claude Code's own state,
+the `gh` login and Claude's memory live there and survive a restart; it is not the Mac's `~/.claude`.
 
 ## Building
 
