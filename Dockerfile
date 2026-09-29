@@ -14,7 +14,7 @@ ARG PYTHON_VERSION=3.13
 # claude-workspace folder.
 USER 0
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl git unzip ripgrep shellcheck \
+ && apt-get install -y --no-install-recommends ca-certificates curl git unzip ripgrep shellcheck tzdata \
       diffutils patch jq procps file make xz-utils zip less tree \
       bind9-dnsutils netcat-openbsd lsof strace sqlite3 \
  && rm -rf /var/lib/apt/lists/* \
@@ -35,6 +35,8 @@ RUN apt-get update \
  && chown -R 1001:0 /workspace /opt/app-root/src
 
 USER 1001
+# The owner's local time, so dates in the container (git, logs, Claude's notes) read as they do on the Mac.
+ENV TZ=America/Los_Angeles
 ENV HOME=/opt/app-root/src
 # ~/.local/bin: fnm, uv, uvx, the default python/python3, and Claude Code.
 # fnm's aliases/default/bin: the default node/npm/npx, so they work in any shell, interactive or not.
