@@ -8,10 +8,8 @@ ARG PYTHON_VERSION=3.13
 # Tools (the slim image has no curl or CA certificates), ripgrep, ShellCheck, the everyday tools a shell session
 # expects (diff, patch, jq, ps, file, make, xz, zip, less, tree) and a few for debugging (dig, nc, lsof, strace,
 # sqlite3), nothing that reaches a cluster or a database server; the GitHub CLI (Debian's package lags far behind,
-# so it comes from the release); and the non-root user. The user keeps the uid, gid, home and shell of
-# the Red Hat UBI image this started from (1001, 0, /opt/app-root/src, bash), so an existing ~/.claude volume
-# still belongs to it and the gh login in it keeps working. /workspace is the mount point for the
-# claude-workspace folder.
+# so it comes from the release); and the non-root user `claude`, with Debian's defaults for a first user (uid 1000,
+# its own group 1000, home /home/claude, bash). /workspace is the mount point for the claude-workspace folder.
 USER 0
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl git unzip ripgrep shellcheck tzdata \
@@ -29,15 +27,14 @@ RUN apt-get update \
  && mv "/tmp/gh_${GH}_linux_$A/bin/gh" /usr/local/bin/gh \
  && rm -rf /tmp/gh_* \
  && gh --version \
- && mkdir -p /opt/app-root \
- && useradd -u 1001 -g 0 -d /opt/app-root/src -m -s /bin/bash default \
+ && useradd -u 1000 -U -m -s /bin/bash claude \
  && mkdir -p /workspace \
- && chown -R 1001:0 /workspace /opt/app-root/src
+ && chown claude:claude /workspace
 
-USER 1001
-# The owner's local time, so dates in the container (git, logs, Claude's notes) read as they do on the Mac.
+USER claude
+# The owner's local time, so dates in the container (git, logs, Claude's notes) read as they do on the host.
 ENV TZ=America/Los_Angeles
-ENV HOME=/opt/app-root/src
+ENV HOME=/home/claude
 # ~/.local/bin: fnm, uv, uvx, the default python/python3, and Claude Code.
 # fnm's aliases/default/bin: the default node/npm/npx, so they work in any shell, interactive or not.
 # gh keeps its login in GH_CONFIG_DIR. Its default, ~/.config/gh, is not on a persisted volume, so it goes

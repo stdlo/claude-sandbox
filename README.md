@@ -3,12 +3,9 @@
 The container image Claude Code runs in. Built on plain Debian 13 (trixie, slim), it adds curl, git, ripgrep,
 the GitHub CLI (`gh`) and the everyday shell tools (diff, patch, jq, ps, file, make, xz, zip, less, tree,
 ShellCheck, and dig, nc, lsof, strace and sqlite3 for debugging; nothing that reaches a cluster or a database
-server), creates the non-root user (uid 1001, gid 0, home `/opt/app-root/src`), installs Claude Code, and sets
-`/workspace` as the working directory. `/workspace` is meant to be a mount of the `claude-workspace` folder
-that holds every repo shared with Claude.
-
-The user's uid, gid and home come from the Red Hat UBI 9 image this started from. Keeping them means an
-existing `claude-config` volume (mounted at `~/.claude`) from that image, and the `gh` login stored in it, carry over unchanged.
+server), creates the non-root user `claude` (uid 1000, gid 1000, home `/home/claude`, Debian's defaults for a first
+user), installs Claude Code, and sets `/workspace` as the working directory. `/workspace` is meant to be a mount of
+the `claude-workspace` folder that holds every repo shared with Claude.
 
 ## Node and Python
 
@@ -55,16 +52,20 @@ To let git itself use the same login for HTTPS remotes, run `gh auth setup-git`.
 `~/.gitconfig`, which is not persisted, so rerun it after a restart.
 
 ## Running it
-The owner's command, from the Mac (the image sets `TZ=America/Los_Angeles`; pass `-e TZ=…` to override it):
+From your machine (the image sets `TZ=America/Los_Angeles`; pass `-e TZ=…` to override it):
 
     docker run -it --rm \
-      -v "$HOME/git/claude-workspace/":/workspace \
-      -v claude-config:/opt/app-root/src/.claude \
+      -v "path/to/claude-workspace/":/workspace \
+      -v claude-config:/home/claude/.claude \
       ghcr.io/stdlo/claude-sandbox claude
 
-`/workspace` is a folder holding the repos Claude may work in, so everything Claude writes there persists on the Mac. `claude-config` is a named
-Docker volume mounted at `~/.claude` inside the container (`/opt/app-root/src/.claude`): Claude Code's own state,
-the `gh` login and Claude's memory live there and survive a restart; it is not the Mac's `~/.claude`.
+`/workspace` is a folder holding the repos Claude may work in, so everything Claude writes there persists on your
+machine. `claude-config` is a named Docker volume mounted at `~/.claude` inside the container
+(`/home/claude/.claude`): Claude Code's own state, the `gh` login and Claude's memory live there and survive a
+restart; it is not your machine's `~/.claude`. A volume first written by an image whose user had another uid needs
+its ownership fixed once, or nothing in it can be read:
+
+    docker run --rm -v claude-config:/v debian:trixie-slim chown -R 1000:1000 /v
 
 ## Building
 
