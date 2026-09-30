@@ -11,6 +11,10 @@ on:
   push:
     branches: ['**']
   workflow_dispatch:
+  # Weekly, so the image carries a fresh Claude Code (the updater's downloads don't survive a container that's
+  # removed on exit): Mondays at 06:00 Pacific (13:00 UTC), on the default branch.
+  schedule:
+    - cron: '0 13 * * 1'
 
 permissions:
   contents: read

@@ -67,10 +67,22 @@ its ownership fixed once, or nothing in it can be read:
 
     docker run --rm -v claude-config:/v debian:trixie-slim chown -R 1000:1000 /v
 
+**Keeping Claude Code's updates between runs.** Claude Code updates itself into `~/.local`, which is not on a volume,
+so with `--rm` every exit discards the update and the next start downloads it again. Either rebuild the image (the
+weekly build below carries the current release) or keep one container instead of removing it:
+
+    docker run -it --name claude-sandbox \
+      -v "path/to/claude-workspace/":/workspace \
+      -v claude-config:/home/claude/.claude \
+      ghcr.io/stdlo/claude-sandbox claude
+
+and from then on `docker start -ai claude-sandbox`. The container's own layer keeps whatever the updater wrote until
+you remove it (`docker rm claude-sandbox`, for example to move to a rebuilt image).
+
 ## Building
 
-GitHub Actions builds the image on every push to any branch (and on demand from the Actions tab, for example
-to pick up a new Claude Code release) and publishes it to GitHub's container registry, named after the
+GitHub Actions builds the image on every push to any branch, every Monday at 06:00 Pacific (so `latest` carries
+the current Claude Code release), and on demand from the Actions tab and publishes it to GitHub's container registry, named after the
 repository: `ghcr.io/stdlo/claude-sandbox`. Every build is tagged with its short commit sha, and builds of
 `main` also as `latest`, so a branch can be tried (`docker pull …:sha-<commit>`) before it merges. It is built
 for `linux/amd64` and `linux/arm64` (Apple silicon), each natively on GitHub's own runners (`ubuntu-latest`
