@@ -19,6 +19,14 @@ Neither is baked in from a language image. Instead:
   install 3.12` adds another; `uv run --python 3.12 …`, a `.python-version` file, or a project's
   `pyproject.toml` picks the version per project.
 
+## Nix
+
+Nix (2.35.4, single-user, no daemon) is installed for repos that declare their tools in a `flake.nix`: in one,
+`nix develop` gives a shell with exactly what its `flake.lock` pins, and `nix develop -c <command>` runs one
+command in it. Flakes are on. The build sandbox is off, as in Nix's own container image, since a container
+can't usually create the namespaces it needs. The store, `/nix`, is the container's own: nothing in it is
+shared with another container.
+
 ## GitHub access
 
 GitHub access goes through `gh`, and the only credential to give it is a **fine-grained personal access token

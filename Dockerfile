@@ -29,17 +29,20 @@ RUN apt-get update \
  && gh --version \
  && useradd -u 1000 -U -m -s /bin/bash claude \
  && mkdir -p /workspace \
- && chown claude:claude /workspace
+ && chown claude:claude /workspace \
+ && mkdir -m 0755 /nix \
+ && chown claude:claude /nix
 
 USER claude
 # The owner's local time, so dates in the container (git, logs, Claude's notes) read as they do on the host.
 ENV TZ=America/Los_Angeles
-ENV HOME=/home/claude
-# ~/.local/bin: fnm, uv, uvx, the default python/python3, and Claude Code.
+ENV HOME=/home/claude \
+    USER=claude
+# ~/.local/bin: fnm, uv, uvx, the default python/python3, and Claude Code. ~/.nix-profile/bin: nix.
 # fnm's aliases/default/bin: the default node/npm/npx, so they work in any shell, interactive or not.
 # gh keeps its login in GH_CONFIG_DIR. Its default, ~/.config/gh, is not on a persisted volume, so it goes
 # under ~/.claude, the one volume every run mounts, and `gh auth login` survives a container restart.
-ENV PATH=$HOME/.local/bin:$HOME/.local/share/fnm/aliases/default/bin:$PATH \
+ENV PATH=$HOME/.local/bin:$HOME/.local/share/fnm/aliases/default/bin:$HOME/.nix-profile/bin:$PATH \
     FNM_DIR=$HOME/.local/share/fnm \
     GH_CONFIG_DIR=$HOME/.claude/gh \
     CLAUDE_CONFIG_DIR=$HOME/.claude \
@@ -57,5 +60,14 @@ RUN curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$HOME/
  && uv python install "$PYTHON_VERSION" --default \
  && curl -fsSL https://claude.ai/install.sh | bash \
  && node --version && npm --version && python3 --version && uv --version && claude --version
+
+# Nix, single-user with no daemon, for repos that declare their tools in a flake: `nix develop` in one gives
+# its pinned shell. The versioned installer checks the release's SHA-256. Flakes are on, and the build sandbox
+# is off, as in Nix's own container image, since a container can't usually create the namespaces it needs.
+RUN printf '%s\n' 'experimental-features = nix-command flakes' 'sandbox = false' > /tmp/nix.conf \
+ && curl -fsSL https://releases.nixos.org/nix/nix-2.35.4/install \
+    | sh -s -- --no-daemon --no-channel-add --no-modify-profile --nix-extra-conf-file /tmp/nix.conf \
+ && rm /tmp/nix.conf \
+ && nix --version
 
 WORKDIR /workspace
