@@ -1,105 +1,62 @@
 # claude-sandbox
 
-The container image Claude Code runs in. Built on plain Debian 13 (trixie, slim), it adds curl, git, ripgrep,
-the GitHub CLI (`gh`) and the everyday shell tools (diff, patch, jq, ps, file, make, xz, zip, less, tree,
-ShellCheck, and dig, nc, lsof, strace and sqlite3 for debugging; nothing that reaches a cluster or a database
-server), creates the non-root user `claude` (uid 1000, gid 1000, home `/home/claude`, Debian's defaults for a first
-user), installs Claude Code, and sets `/workspace` as the working directory. `/workspace` is meant to be a mount of
-the `claude-workspace` folder that holds every repo shared with Claude.
+The container image Claude Code runs in. A small Debian 13 base, pinned by digest, gives the standard Linux layout
+that downloaded programs expect. Every tool comes from Nix, all from one pinned nixpkgs revision: git, `gh`,
+Python, ripgrep, jq, ShellCheck, fish, sops, age, and the everyday shell and debugging tools. Nothing in it reaches a
+cluster or a database server. Claude Code runs as the non-root user `claude` (uid 1000, home `/home/claude`) in
+`/workspace`, a mount of the folder that holds the repos Claude may work in.
 
-## Node and Python
+## A repo's own tools
 
-Neither is baked in from a language image. Instead:
+The image carries no language toolchain. A repo brings its own through Nix:
 
-- **fnm** manages Node. The image installs one default (`NODE_VERSION`, 24). In a shell, `fnm install 22` adds
-  another and `fnm use 22` switches. In interactive shells only, a `.node-version` or `.nvmrc` in a repo
-  switches automatically on `cd`; Claude's tool shells keep the default Node and don't run the hook. The default's
-  `node`, `npm` and `npx` are on `PATH` for non-interactive commands too.
-- **uv** manages Python. The image installs one default (`PYTHON_VERSION`, 3.13) as `python3`. `uv python
-  install 3.12` adds another; `uv run --python 3.12 …`, a `.python-version` file, or a project's
-  `pyproject.toml` picks the version per project.
+- A repo with a `flake.nix`: `nix develop` gives a shell with exactly what its `flake.lock` pins, and
+  `nix develop -c <command>` runs one command in it.
+- Anything else: `nix shell nixpkgs#nodejs_24 -c npm test`, for example, gives a tool for one command.
 
-## Nix
+Nix is single-user, with flakes on and its build sandbox off (as in Nix's own container image, since a container
+can't usually create the namespaces it needs). The store, `/nix`, is the container's own and shared with no other.
 
-Nix (2.35.4, single-user, no daemon) is installed for repos that declare their tools in a `flake.nix`: in one,
-`nix develop` gives a shell with exactly what its `flake.lock` pins, and `nix develop -c <command>` runs one
-command in it. Flakes are on. The build sandbox is off, as in Nix's own container image, since a container
-can't usually create the namespaces it needs. The store, `/nix`, is the container's own: nothing in it is
-shared with another container.
+## Updating
+
+Every tool moves together: bump `NIXPKGS_REV` in the Dockerfile. The base moves by its digest. Claude Code is the
+current release at each build; the weekly build keeps it fresh.
+
+## Running it
+
+With Podman (with Docker, leave out `--userns` and the volume's `:U`):
+
+    podman run -it --rm --init \
+      --userns=keep-id:uid=1000,gid=1000 \
+      -v "$HOME/path/to/repos":/workspace \
+      -v claude-config:/home/claude/.claude:U \
+      ghcr.io/stdlo/claude-sandbox claude
+
+- `--userns=keep-id` maps you to `claude`, so files written in `/workspace` are yours on the host.
+- `claude-config` is a named volume at `~/.claude` that keeps Claude Code's login and state, and the `gh` login,
+  between runs. It is not your machine's `~/.claude`.
+- `--init` reaps finished processes, which Claude Code doesn't, so a long run never runs out of them.
+
+Mount nothing else: no home folder, no `~/.kube`, `~/.aws`, or `~/.ssh`, and no container engine socket. What isn't
+mounted can't be reached.
 
 ## GitHub access
 
-GitHub access goes through `gh`, and the only credential to give it is a **fine-grained personal access token
-restricted to the repositories Claude should see**. Anything stored in the container is readable by Claude
-and persists between sessions, so the token itself has to be the fence: a fine-grained token cannot see
-that a repository it wasn't granted exists. Do not use the interactive `gh auth login` browser flow; it
-issues a token that reaches every repository your account can, restricted only by permission type.
+Give `gh` a **fine-grained personal access token limited to the repositories Claude should see**; a token can't
+see a repository it wasn't granted, so the token is the fence. Avoid `gh auth login`'s browser flow, which issues a
+token that reaches every repository your account can.
 
-1. On GitHub: Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new
-   token.
-2. Resource owner: whoever owns the repos, your account or an organization. Repository access: **Only select
-   repositories**, then pick exactly the repos that are shared with Claude. Anything left off the list is
-   invisible to the token, which is the point.
-3. Permissions: **Contents: read-only** and Metadata: read (added automatically). Read-only contents also
-   means Claude cannot push, which is the working rule anyway. Add Pull requests and Issues (read and write)
-   only if Claude should open or comment on those.
-4. Expiration: the maximum is one year. Note the date somewhere you will see it.
-5. Inside the container (in a Claude Code session, the `!` prefix runs it there), paste the token when asked:
+1. On GitHub: Settings › Developer settings › Personal access tokens › Fine-grained tokens › Generate new token.
+2. Repository access: **Only select repositories**, then the ones shared with Claude.
+3. Permissions: **Contents: read-only** (Metadata is added). Add Pull requests or Issues only if Claude should use
+   them.
+4. In the container: `gh auth login --with-token`, then paste the token. It's kept in `~/.claude/gh`, on the volume.
+5. Check it: `gh api repos/<owner>/<a repo not on the list>` fails with a 404, and a shared one works.
 
-       ! gh auth login --with-token
+`gh auth setup-git` lets git use the same login for HTTPS; it writes `~/.gitconfig`, which isn't on the volume, so
+run it again after a restart.
 
-   The login is stored in `GH_CONFIG_DIR`, which the image points at `~/.claude/gh` rather than the default
-   `~/.config/gh`, so it sits on the `claude-config` volume mounted at `~/.claude` ("Running it" above) and survives a restart. Nothing
-   needs to be set on `docker run`.
-6. Check the fence. A repo that is not on the token's list must fail with a 404, and a shared one must work:
+## Builds
 
-       gh api repos/<owner>/<repo-not-shared>
-       gh repo view <owner>/<shared-repo>
-
-To let git itself use the same login for HTTPS remotes, run `gh auth setup-git`. It writes to
-`~/.gitconfig`, which is not persisted, so rerun it after a restart.
-
-## Running it
-From your machine (the image sets `TZ=America/Los_Angeles`; pass `-e TZ=…` to override it):
-
-    docker run -it --rm \
-      -v "path/to/claude-workspace/":/workspace \
-      -v claude-config:/home/claude/.claude \
-      ghcr.io/stdlo/claude-sandbox claude
-
-`/workspace` is a folder holding the repos Claude may work in, so everything Claude writes there persists on your
-machine. `claude-config` is a named Docker volume mounted at `~/.claude` inside the container
-(`/home/claude/.claude`): Claude Code's own state, the `gh` login and Claude's memory live there and survive a
-restart; it is not your machine's `~/.claude`. A volume first written by an image whose user had another uid needs
-its ownership fixed once, or nothing in it can be read:
-
-    docker run --rm -v claude-config:/v debian:trixie-slim chown -R 1000:1000 /v
-
-**Keeping Claude Code's updates between runs.** Claude Code updates itself into `~/.local`, which is not on a volume,
-so with `--rm` every exit discards the update and the next start downloads it again. Either rebuild the image (the
-weekly build below carries the current release) or keep one container instead of removing it:
-
-    docker run -it --name claude-sandbox \
-      -v "path/to/claude-workspace/":/workspace \
-      -v claude-config:/home/claude/.claude \
-      ghcr.io/stdlo/claude-sandbox claude
-
-and from then on `docker start -ai claude-sandbox`. The container's own layer keeps whatever the updater wrote until
-you remove it (`docker rm claude-sandbox`, for example to move to a rebuilt image).
-
-## Building
-
-GitHub Actions builds the image on every push to any branch, every Monday at 06:00 Pacific (so `latest` carries
-the current Claude Code release), and on demand from the Actions tab and publishes it to GitHub's container registry, named after the
-repository: `ghcr.io/stdlo/claude-sandbox`. Every build is tagged with its short commit sha, and builds of
-`main` also as `latest`, so a branch can be tried (`docker pull …:sha-<commit>`) before it merges. It is built
-for `linux/amd64` and `linux/arm64` (Apple silicon), each natively on GitHub's own runners (`ubuntu-latest`
-and `ubuntu-24.04-arm`) in parallel, then joined into one multi-arch manifest. There is no schedule; a rebuild
-happens only when something is pushed or someone asks for one.
-
-    docker pull ghcr.io/stdlo/claude-sandbox:latest
-
-To build locally, optionally with other defaults:
-
-    docker build -t claude-sandbox .
-    docker build -t claude-sandbox --build-arg NODE_VERSION=22 --build-arg PYTHON_VERSION=3.12 .
+GitHub Actions builds every push to any branch, natively for amd64 and arm64, tagged `sha-<7 characters>`; `main`
+also moves `latest`. A weekly build on Mondays picks up Claude Code's newest release.
