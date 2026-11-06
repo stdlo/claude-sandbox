@@ -31,13 +31,15 @@ ENV HOME=/home/claude \
     GH_CONFIG_DIR=/home/claude/.claude/gh \
     USE_BUILTIN_RIPGREP=0
 
-# Nix, single-user with no daemon. The versioned installer checks the release's SHA-256. The build sandbox is off,
-# as in Nix's own container image, since a container can't usually create the namespaces it needs.
-RUN printf '%s\n' 'experimental-features = nix-command flakes' 'sandbox = false' >/tmp/nix.conf \
+# Nix, single-user with no daemon, configured in its per-user file. The versioned installer checks the release's
+# SHA-256. The build sandbox is off, as in Nix's own container image, since a container can't usually create the
+# namespaces it needs.
+RUN mkdir -p "$HOME/.config/nix" \
+ && printf '%s\n' 'experimental-features = nix-command flakes' 'sandbox = false' >"$HOME/.config/nix/nix.conf" \
  && curl -fsSL "https://releases.nixos.org/nix/nix-$NIX_VERSION/install" \
-    | sh -s -- --no-daemon --no-channel-add --no-modify-profile --nix-extra-conf-file /tmp/nix.conf \
- && rm /tmp/nix.conf \
- && nix --version
+    | sh -s -- --no-daemon --no-channel-add --no-modify-profile \
+ && nix --version \
+ && nix config show experimental-features
 
 # Everyday tools and a few for debugging; nothing that reaches a cluster or a database server.
 RUN n="github:NixOS/nixpkgs/$NIXPKGS_REV" \
