@@ -7,9 +7,11 @@ FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f0
 ARG NIX_VERSION=2.35.4
 ARG NIXPKGS_REV=1d060086d60cb76a40cf37109f979d88a5bd6396
 
-# Only what the Nix installer needs, the non-root user, and the mount point for the workspace folder.
+# Debian's security fixes since the pinned base, only what the Nix installer needs, the non-root user, and the
+# mount point for the workspace folder.
 USER 0
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends ca-certificates curl xz-utils \
  && rm -rf /var/lib/apt/lists/* \
  && useradd -u 1000 -U -m -s /bin/bash claude \

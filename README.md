@@ -19,7 +19,8 @@ can't usually create the namespaces it needs). The store, `/nix`, is the contain
 
 ## Updating
 
-Every tool moves together: bump `NIXPKGS_REV` in the Dockerfile. The base moves by its digest. Claude Code is the
+Every tool moves together: bump `NIXPKGS_REV` in the Dockerfile. The base moves by its digest, and each build
+applies Debian's security fixes released since. Claude Code is the
 current release at each build; the weekly build keeps it fresh.
 
 ## Running it
